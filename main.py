@@ -7,6 +7,21 @@ import base64
 import uuid
 import requests
 
+from enum import IntEnum
+
+class ACMode(IntEnum):
+    AUTO = 1
+    COOL = 2
+    DRY = 3
+    FAN = 4
+    HEAT = 5
+
+class ACFanSpeed(IntEnum):
+    AUTO = 1
+    LOW = 2
+    MEDIUM = 3
+    HIGH = 4
+
 apiHeader = {}
 token = os.environ["SWITCHBOT_TOKEN"].strip()
 secret = os.environ["SWITCHBOT_SECRET"].strip()
@@ -24,45 +39,75 @@ apiHeader['t']=str(t)
 apiHeader['sign']=str(sign, 'utf-8')
 apiHeader['nonce']=str(nonce)
 
-
-devices_url = "https://api.switch-bot.com/v1.1/devices"
+api = "https://api.switch-bot.com/v1.1/" 
+devices_url = api + "/devices"
 response = requests.get(devices_url, headers=apiHeader)
 devices_data = response.json()
 
-# Print all infrared remotes to find your Air Conditioner's deviceId
-for ir_device in devices_data.get('body', {}).get('infraredRemoteList', []):
-    print(f"Name: {ir_device['deviceName']} | Type: {ir_device['remoteType']} | ID: {ir_device['deviceId']}")
+ir_list = devices_data.get("body", {}).get("infraredRemoteList", [])
 
-for dev in devices_data.get("body", {}).get("deviceList", []):
-    print(f"Name: {dev['deviceName']} | Type: {dev.get('deviceType')} | ID: {dev['deviceId']}")
-    if dev.get("deviceType") == "Hub 2":
-        hub2_device_id = dev["deviceId"]
+ac_device = next(
+    filter(lambda d: d.get("remoteType") == "Air Conditioner", ir_list)
+)
 
-status_url = f"{devices_url}/{hub2_device_id}/status"
+ac_device_id = ac_device["deviceId"]
+print(ascii(ac_device))
+print(ac_device_id)
 
-res = requests.get(status_url, headers=apiHeader)
-data = res.json()
+def getHub2Device():
+    return next(
+        map(
+            lambda d: d["deviceId"],
+            filter(lambda d: d.get("deviceType") == "Hub 2", devices_data.get("body", {}).get("deviceList", []))
+        )
+    )
 
-# Print the full status response
-print(data)
+def commandURL(id):
+    return f"{devices_url}/{id}/commands"
+    
+def getCommands(id):
+        payload = {
+            "command": "turnOff",
+            "parameter": "default",
+            "commandType": "command"
+        }
+        res = requests.post(commandURL(id), headers=apiHeader, json=payload)
+        print(res.json())
+        return res
 
-# Extract specific sensor readings
-status_body = data.get('body', {})
-humidity = status_body.get('humidity')
-temperature = status_body.get('temperature')
-light_level = status_body.get('lightLevel')
-
-
-
-
-def diy():
-    light_device_id = "01-202611081937-37986025"
-    command_url = f"{devices_url}/{light_device_id}/commands"
+def diy(id):
     payload = {
         "command": "turnOff",
         "parameter": "default",
         "commandType": "command"
     }
-    res = requests.post(command_url, headers=apiHeader, json=payload)
+    res = requests.post(commandURL(id), headers=apiHeader, json=payload)
     print(res.json())
     return res
+
+def setAC(id, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
+    url = commandURL(id)
+
+    payload = {
+        "command": "setAll",
+        "parameter": f"{temperature},{mode},{fan_speed},{power}",
+        "commandType": "command"
+    }   
+    print(payload)         
+    res = requests.post(commandURL(id), headers=apiHeader, json=payload)
+    print(res.json())
+    return res
+
+data = requests.get(f"{devices_url}/{getHub2Device()}/status", headers=apiHeader)
+status_body = data.json().get('body', {})
+humidity = status_body.get('humidity')
+temperature = status_body.get('temperature')
+light_level = status_body.get('lightLevel')
+
+threshold_temperature = 20
+threshold_humidity = 75
+setAC(ac_device_id, threshold_temperature,
+      "on" if humidity > threshold_humidity else "off",
+      ACMode.DRY if temperature > threshold_temperature else ACMode.HEAT,
+      ACFanSpeed.HIGH)
+
