@@ -106,8 +106,8 @@ light_level = status_body.get('lightLevel')
 
 threshold_temperature = 20
 threshold_humidity = 75
-setAC(ac_device_id, threshold_temperature,
+"""  setAC(ac_device_id, threshold_temperature,
       "on" if humidity > threshold_humidity else "off",
       ACMode.DRY if temperature > threshold_temperature else ACMode.HEAT,
-      ACFanSpeed.HIGH)
+      ACFanSpeed.HIGH)"""
 
