@@ -49,18 +49,13 @@ ir_list = devices_data.get("body", {}).get("infraredRemoteList", [])
 ac_device = next(
     filter(lambda d: d.get("remoteType") == "Air Conditioner", ir_list)
 )
-
-ac_device_id = ac_device["deviceId"]
 print(ascii(ac_device))
-print(ac_device_id)
+panasonicId = ac_device["deviceId"]
+print(panasonicId)
 
 def getHub2Device():
-    return next(
-        map(
-            lambda d: d["deviceId"],
-            filter(lambda d: d.get("deviceType") == "Hub 2", devices_data.get("body", {}).get("deviceList", []))
-        )
-    )
+    return next(map(lambda d: d["deviceId"],
+            filter(lambda d: d.get("deviceType") == "Hub 2", devices_data.get("body", {}).get("deviceList", []))))
 
 def commandURL(id):
     return f"{devices_url}/{id}/commands"
@@ -93,21 +88,21 @@ def setAC(id, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
         "parameter": f"{temperature},{mode},{fan_speed},{power}",
         "commandType": "command"
     }   
-    print(payload)         
+    print(f"{temperature},mode={mode.name},fan={fan_speed.name},{power}")         
     res = requests.post(commandURL(id), headers=apiHeader, json=payload)
     print(res.json())
     return res
 
 data = requests.get(f"{devices_url}/{getHub2Device()}/status", headers=apiHeader)
 status_body = data.json().get('body', {})
+print(status_body)
 humidity = status_body.get('humidity')
 temperature = status_body.get('temperature')
 light_level = status_body.get('lightLevel')
 
 threshold_temperature = 20
 threshold_humidity = 75
-"""  setAC(ac_device_id, threshold_temperature,
+setAC(panasonicId, threshold_temperature,
       "on" if humidity > threshold_humidity else "off",
-      ACMode.DRY if temperature > threshold_temperature else ACMode.HEAT,
-      ACFanSpeed.HIGH)"""
+      ACMode.HEAT if temperature < threshold_temperature else ACMode.AUTO)
 
