@@ -1,4 +1,4 @@
-import json
+import sys
 import os
 import time
 import hashlib
@@ -6,7 +6,6 @@ import hmac
 import base64
 import uuid
 import requests
-
 from enum import IntEnum
 
 class ACMode(IntEnum):
@@ -22,6 +21,11 @@ class ACFanSpeed(IntEnum):
     MEDIUM = 3
     HIGH = 4
 
+threshold_temperature = 16
+threshold_humidity = 60
+
+mon = getattr(sys, "monitoring", None)
+debug = mon and mon.get_tool(mon.DEBUGGER_ID)
 apiHeader = {}
 token = os.environ["SWITCHBOT_TOKEN"].strip()
 secret = os.environ["SWITCHBOT_SECRET"].strip()
@@ -44,18 +48,11 @@ devices_url = api + "/devices"
 response = requests.get(devices_url, headers=apiHeader)
 devices_data = response.json()
 
-ir_list = devices_data.get("body", {}).get("infraredRemoteList", [])
 
-ac_device = next(
-    filter(lambda d: d.get("remoteType") == "Air Conditioner", ir_list)
-)
-print(ascii(ac_device))
-panasonicId = ac_device["deviceId"]
-print(panasonicId)
+#db = firestore.get_firestore_client()
+#STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
 
-def getHub2Device():
-    return next(map(lambda d: d["deviceId"],
-            filter(lambda d: d.get("deviceType") == "Hub 2", devices_data.get("body", {}).get("deviceList", []))))
+body = devices_data.get("body", {})
 
 def commandURL(id):
     return f"{devices_url}/{id}/commands"
@@ -80,29 +77,51 @@ def diy(id):
     print(res.json())
     return res
 
-def setAC(id, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
-    url = commandURL(id)
-
+def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
     payload = {
         "command": "setAll",
         "parameter": f"{temperature},{mode},{fan_speed},{power}",
         "commandType": "command"
-    }   
-    print(f"{temperature},mode={mode.name},fan={fan_speed.name},{power}")         
-    res = requests.post(commandURL(id), headers=apiHeader, json=payload)
-    print(res.json())
-    return res
+    }
+      
+    for id in ids: 
+        print(f"{id}: {temperature}°C, {mode.name}, fan={fan_speed.name}, {power}")         
+        if not debug:
+            print(debug)
+            res = requests.post(commandURL(id), headers=apiHeader, json=payload)
+            print(res.json())
 
-data = requests.get(f"{devices_url}/{getHub2Device()}/status", headers=apiHeader)
-status_body = data.json().get('body', {})
-print(status_body)
-humidity = status_body.get('humidity')
-temperature = status_body.get('temperature')
-light_level = status_body.get('lightLevel')
+remotes = body.get("infraredRemoteList", [])
+aircons = list(filter(lambda r: "Air Conditioner" in r.get("remoteType", ""), remotes))
+devices = body.get("deviceList", [])
+hub_names = dict(map(lambda d: (d["deviceId"], d["deviceName"]), devices))
+# Filter to only physical Hubs, then map each Hub to its list of controlled remotes
+hubs = filter(lambda d: "Hub" in d.get("deviceType", ""), devices)
+mm = dict(map(
+    lambda h: (
+        h["deviceName"],
+        list(map(
+            lambda r: r["deviceId"],
+            filter(lambda r: r.get("hubDeviceId") == h["deviceId"], aircons)
+        ))
+    ),
+    hubs
+))
 
-threshold_temperature = 20
-threshold_humidity = 75
-setAC(panasonicId, threshold_temperature,
-      "on" if humidity > threshold_humidity else "off",
-      ACMode.HEAT if temperature < threshold_temperature else ACMode.AUTO)
+for device in devices:
+    hub_id = device["deviceId"]
+    hub_name = device["deviceName"]
+    id = mm[hub_name]
+    print(hub_name)
+    data = requests.get(f"{devices_url}/{hub_id}/status", headers=apiHeader)
+    status_body = data.json().get('body', {})
+    print(status_body)
+    if (status_body):
+        humidity = status_body.get('humidity')
+        temperature = status_body.get('temperature')
+        light_level = status_body.get('lightLevel')
 
+        setAC(id, threshold_temperature,
+            "on" if humidity > threshold_humidity else "off",
+            ACMode.HEAT if temperature < threshold_temperature else ACMode.AUTO)
+    print()
