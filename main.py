@@ -21,8 +21,8 @@ class ACFanSpeed(IntEnum):
     MEDIUM = 3
     HIGH = 4
 
-threshold_temperature = 16
-threshold_humidity = 60
+threshold_temperature = 20
+threshold_humidity = 70
 
 mon = getattr(sys, "monitoring", None)
 debug = mon and mon.get_tool(mon.DEBUGGER_ID)
@@ -43,39 +43,10 @@ apiHeader['t']=str(t)
 apiHeader['sign']=str(sign, 'utf-8')
 apiHeader['nonce']=str(nonce)
 
-api = "https://api.switch-bot.com/v1.1/" 
-devices_url = api + "/devices"
+devices_url = "https://api.switch-bot.com/v1.1/devices"
 response = requests.get(devices_url, headers=apiHeader)
 devices_data = response.json()
-
-
-#db = firestore.get_firestore_client()
-#STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
-
 body = devices_data.get("body", {})
-
-def commandURL(id):
-    return f"{devices_url}/{id}/commands"
-    
-def getCommands(id):
-        payload = {
-            "command": "turnOff",
-            "parameter": "default",
-            "commandType": "command"
-        }
-        res = requests.post(commandURL(id), headers=apiHeader, json=payload)
-        print(res.json())
-        return res
-
-def diy(id):
-    payload = {
-        "command": "turnOff",
-        "parameter": "default",
-        "commandType": "command"
-    }
-    res = requests.post(commandURL(id), headers=apiHeader, json=payload)
-    print(res.json())
-    return res
 
 def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
     payload = {
@@ -85,10 +56,10 @@ def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
     }
       
     for id in ids: 
-        print(f"{id}: {temperature}°C, {mode.name}, fan={fan_speed.name}, {power}")         
+        print(f"{id["deviceName"]}: {temperature}°C, {mode.name}, fan={fan_speed.name}, {power}")         
         if not debug:
             print(debug)
-            res = requests.post(commandURL(id), headers=apiHeader, json=payload)
+            res = requests.post(f"{devices_url}/{id['deviceId']}/commands", headers=apiHeader, json=payload)
             print(res.json())
 
 remotes = body.get("infraredRemoteList", [])
@@ -97,31 +68,27 @@ devices = body.get("deviceList", [])
 hub_names = dict(map(lambda d: (d["deviceId"], d["deviceName"]), devices))
 # Filter to only physical Hubs, then map each Hub to its list of controlled remotes
 hubs = filter(lambda d: "Hub" in d.get("deviceType", ""), devices)
-mm = dict(map(
+hub2ac = dict(map(
     lambda h: (
         h["deviceName"],
-        list(map(
-            lambda r: r["deviceId"],
-            filter(lambda r: r.get("hubDeviceId") == h["deviceId"], aircons)
-        ))
+        list(filter(lambda r: r.get("hubDeviceId") == h["deviceId"], aircons))
     ),
     hubs
 ))
 
+#db = firestore.get_firestore_client()
+#STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
+
 for device in devices:
     hub_id = device["deviceId"]
     hub_name = device["deviceName"]
-    id = mm[hub_name]
+    ac = hub2ac[hub_name]
     print(hub_name)
     data = requests.get(f"{devices_url}/{hub_id}/status", headers=apiHeader)
     status_body = data.json().get('body', {})
     print(status_body)
     if (status_body):
-        humidity = status_body.get('humidity')
-        temperature = status_body.get('temperature')
-        light_level = status_body.get('lightLevel')
-
-        setAC(id, threshold_temperature,
-            "on" if humidity > threshold_humidity else "off",
-            ACMode.HEAT if temperature < threshold_temperature else ACMode.AUTO)
+        setAC(ac, threshold_temperature,
+            "on" if status_body.get('humidity') > threshold_humidity else "off",
+            ACMode.HEAT if status_body.get('temperature') < threshold_temperature else ACMode.DRY)
     print()
