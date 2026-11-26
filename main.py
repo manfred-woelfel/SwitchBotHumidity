@@ -78,7 +78,8 @@ hub2ac = dict(map(
 ))
 
 db = firestore.get_firestore_client()
-STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
+if db:
+    STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
 
 for device in devices:
     hub_id = device["deviceId"]
