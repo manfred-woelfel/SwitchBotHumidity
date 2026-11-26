@@ -14,5 +14,6 @@ def get_firestore_client():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_key
     else:
         print(f"[DEBUG] Could not find key at: {local_key}")
+        return None
 
     return firestore.Client()

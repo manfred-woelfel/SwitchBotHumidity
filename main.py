@@ -7,6 +7,7 @@ import base64
 import uuid
 import requests
 from enum import IntEnum
+import firestore
 
 class ACMode(IntEnum):
     AUTO = 1
@@ -57,7 +58,7 @@ def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
       
     for id in ids: 
         print(f"{id["deviceName"]}: {temperature}°C, {mode.name}, fan={fan_speed.name}, {power}")         
-        if not debug:
+        if not debug and db:
             print(debug)
             res = requests.post(f"{devices_url}/{id['deviceId']}/commands", headers=apiHeader, json=payload)
             print(res.json())
@@ -76,8 +77,8 @@ hub2ac = dict(map(
     hubs
 ))
 
-#db = firestore.get_firestore_client()
-#STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
+db = firestore.get_firestore_client()
+STATE_DOC = db.collection("smart_home").document("tatami_ac_state")
 
 for device in devices:
     hub_id = device["deviceId"]
