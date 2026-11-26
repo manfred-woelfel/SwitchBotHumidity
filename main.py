@@ -60,7 +60,7 @@ def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
         print(f"{id["deviceName"]}: {temperature}°C, {mode.name}, fan={fan_speed.name}, {power}")         
         if not debug and db:
             print(debug)
-            res = requests.post(f"{devices_url}/{id['deviceId']}/commands", headers=apiHeader, json=payload)
+            #res = requests.post(f"{devices_url}/{id['deviceId']}/commands", headers=apiHeader, json=payload)
             print(res.json())
 
 remotes = body.get("infraredRemoteList", [])
