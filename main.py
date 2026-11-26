@@ -61,7 +61,7 @@ def setAC(ids, temperature, power, mode=ACMode.AUTO, fan_speed=ACFanSpeed.AUTO):
         if not debug and db:
             print(debug)
             #res = requests.post(f"{devices_url}/{id['deviceId']}/commands", headers=apiHeader, json=payload)
-            print(res.json())
+            #print(res.json())
 
 remotes = body.get("infraredRemoteList", [])
 aircons = list(filter(lambda r: "Air Conditioner" in r.get("remoteType", ""), remotes))
